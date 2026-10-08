@@ -1,5 +1,7 @@
 import { test as base, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { articles, projects, artworks, journalEntries } from '../src/content/archive'
+import { naverArticles } from '../src/content/naver'
 
 const test = base.extend<{ runtimeErrors: string[] }>({
   runtimeErrors: [async ({ page }, use) => {
@@ -22,8 +24,8 @@ const sections = [
   { label: 'Contact', path: '/contact', heading: 'A conversation starts here.' },
 ]
 
-async function goTo(page: Page, path: string) {
-  await page.goto(`/#${path}`)
+async function goTo(page: Page, path: string, language: 'en' | 'ko' = 'en') {
+  await page.goto(`/#/${language}${path === '/' ? '' : path}`)
   const headings: Record<string, string | RegExp> = {
     '/': /everything.*nothing/,
     '/index': 'The index.',
@@ -35,16 +37,17 @@ async function goTo(page: Page, path: string) {
   const collection = path.split('/')[1]
   const isMissingEntry = path.split('/').length === 3
   const heading = headings[path] || (isMissingEntry ? collection === 'journal' ? /This page isn’t in.*the collection/ : /This page has.*left the shelf/ : 'A little lost?')
-  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: heading })).toBeVisible()
-  if (isMissingEntry && !headings[path]) {
+  await expect(page.getByRole('main').getByRole('heading', { level: 1, ...(language === 'en' ? { name: heading } : {}) })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', language)
+  if (language === 'en' && isMissingEntry && !headings[path]) {
     await expect(page.getByRole('main')).toContainText(collection === 'journal' ? 'NO ENTRY FOUND' : `the ${collection} collection`)
   }
   // Wait for the page fade to finish so layout and contrast are measured as a visitor sees them.
   await expect(page.getByRole('main').locator(':scope > div')).toHaveCSS('opacity', '1')
 }
 
-async function expectRoute(page: Page, path: string) {
-  await expect.poll(() => new URL(page.url()).hash).toBe(`#${path}`)
+async function expectRoute(page: Page, path: string, language: 'en' | 'ko' = 'en') {
+  await expect.poll(() => new URL(page.url()).hash).toBe(`#/${language}${path === '/' ? '' : path}`)
 }
 
 test('all main sections can be reached through navigation and the archive index', async ({ page }) => {
@@ -130,8 +133,23 @@ test('Surprise me opens published work from the home page and index', async ({ p
   for (const route of ['/', '/index', '/']) {
     await goTo(page, route)
     await page.getByRole('button', { name: /Surprise me/ }).first().click()
-    await expectRoute(page, '/projects/rena-seulgi-jang')
-    await expect(page.getByRole('complementary', { name: 'Project details' })).toContainText('Published')
+    await expect.poll(() => new URL(page.url()).hash).toMatch(/^#\/en\/(projects|art|writing|journal)\//)
+    const [, collection, id] = new URL(page.url()).hash.replace('#/en', '').split('/')
+    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible()
+    if (collection === 'projects') {
+      const project = projects.find(item => item.id === id)
+      expect(project?.status).toBe('published')
+      await expect(page.getByRole('complementary', { name: 'Project details' })).toContainText('Published')
+    } else if (collection === 'writing') {
+      const article = articles.find(item => item.id === id)
+      expect(article, 'Surprise Me should open a real article').toBeDefined()
+      expect(Boolean(article?.body?.length || article?.externalUrl)).toBe(true)
+      if (article?.externalUrl) await expect(page.getByRole('main').getByRole('link', { name: /Read .* on/ })).toHaveAttribute('href', article.externalUrl)
+    } else if (collection === 'art') {
+      expect(artworks.some(item => item.id === id && item.image)).toBe(true)
+    } else {
+      expect(journalEntries.some(item => item.id === id && item.body.length)).toBe(true)
+    }
   }
 })
 
@@ -142,18 +160,12 @@ test('empty collections and the missing CV tell visitors what is available', asy
   await expect(page.getByRole('link', { name: /Follow @paintwithhanyee/ }))
     .toHaveAttribute('href', 'https://www.instagram.com/paintwithhanyee/')
 
-  await goTo(page, '/writing')
-  await expect(page.getByRole('main')).toContainText('Awaiting the first published entry')
-  const writingFilters = page.getByRole('group', { name: 'Filter writing by category' })
-  await writingFilters.getByRole('button', { name: 'Essays', exact: true }).click()
-  await expect(page.getByRole('main').locator('[aria-live="polite"]')).toHaveText('00 pieces')
-  await expect(page.getByRole('main')).toContainText('Awaiting the first published entry')
-
   await goTo(page, '/journal')
   await expect(page.getByRole('main')).toContainText('The first notes are still to come.')
   await expect(page.getByRole('main').getByRole('time')).toHaveCount(0)
 
-  await page.getByRole('link', { name: 'CV — coming soon', exact: true }).click()
+  await goTo(page, '/about')
+  await page.getByRole('main').getByRole('link', { name: 'CV coming soon', exact: true }).click()
   await expectRoute(page, '/cv')
   await expect(page.getByRole('main')).toContainText('The CV PDF hasn’t been added yet.')
   await expect(page.getByRole('main').locator('a[href$=".pdf"]')).toHaveCount(0)
@@ -161,6 +173,30 @@ test('empty collections and the missing CV tell visitors what is available', asy
   await expectRoute(page, '/about')
   await expect(page.getByRole('main')).toContainText('King’s College London')
   await expect(page.getByRole('main')).toContainText('Client Services Administrator Intern')
+})
+
+test('writing previews can be narrowed by source, paginated, searched and reset', async ({ page }) => {
+  await goTo(page, '/writing')
+  const main = page.getByRole('main')
+  await expect(main.getByRole('article')).toHaveCount(16)
+  const sourceFilters = page.getByRole('group', { name: 'Filter writing by source', exact: true })
+  const naverFilter = sourceFilters.getByRole('button', { name: /^Naver Blog/ })
+  await expect(naverFilter).toContainText(String(naverArticles.length))
+  await naverFilter.click()
+  await expect(naverFilter).toHaveAttribute('aria-pressed', 'true')
+  await expect(main.locator('[aria-live="polite"]')).toHaveText(`${naverArticles.length} pieces · showing 1–16`)
+  const firstTitle = await main.getByRole('article').first().getByRole('heading', { level: 2 }).innerText()
+  await page.getByRole('button', { name: 'Next page', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Go to page 2', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(main.locator('[aria-live="polite"]')).toHaveText(`${naverArticles.length} pieces · showing 17–32`)
+  await expect(main.getByRole('article').first().getByRole('heading', { level: 2 })).not.toHaveText(firstTitle)
+  await page.getByRole('searchbox', { name: 'Search titles, excerpts and tags', exact: true }).fill(naverArticles[0].title)
+  await expect(main.getByRole('heading', { level: 2 }).filter({ hasText: naverArticles[0].title })).toBeVisible()
+  await expect(main.getByRole('article')).toHaveCount(1)
+  await expect(main.getByRole('img')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Reset filters', exact: true }).click()
+  await expect(sourceFilters.getByRole('button', { name: /^All sources/ })).toHaveAttribute('aria-pressed', 'true')
+  await expect(main.locator('[aria-live="polite"]')).toHaveText(`${articles.length} pieces · showing 1–16`)
 })
 
 test('unknown collection entries and addresses have a useful way back', async ({ page }) => {
@@ -230,17 +266,19 @@ test('the footer discovery can be opened and closed', async ({ page }) => {
   await expect(page.getByRole('status')).toHaveCount(0)
 })
 
-for (const width of [320, 390, 768, 1440]) {
-  test(`all pages fit a ${width}px viewport without horizontal scrolling`, async ({ page }) => {
+for (const language of ['en', 'ko'] as const) {
+ for (const width of [320, 390, 768, 1440]) {
+  test(`all ${language} pages fit a ${width}px viewport without horizontal scrolling`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     for (const path of ['/', ...sections.map((section) => section.path), '/index', '/cv', '/projects/rena-seulgi-jang', '/projects/hori-and-kkachi']) {
-      await goTo(page, path)
+      await goTo(page, path, language)
       await page.evaluate(() => document.fonts.ready)
       const size = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: window.innerWidth }))
-      expect(size.page, `${path} at ${width}px`).toBeLessThanOrEqual(size.viewport)
+      expect(size.page, `/${language}${path} at ${width}px`).toBeLessThanOrEqual(size.viewport)
     }
   })
+ }
 }
 
 test('home layout screenshots are available for desktop and mobile review', async ({ page }, testInfo) => {
@@ -251,15 +289,19 @@ test('home layout screenshots are available for desktop and mobile review', asyn
 })
 
 test('the populated routes pass automated WCAG accessibility checks', async ({ page }, testInfo) => {
-  test.setTimeout(120_000)
+  test.setTimeout(180_000)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const issues: { path: string; id: string; impact: string | null | undefined; nodes: { target: string[]; failureSummary: string | undefined }[] }[] = []
-  for (const path of ['/', ...sections.map((section) => section.path), '/index', '/cv', '/projects/rena-seulgi-jang', '/projects/hori-and-kkachi']) {
-    await goTo(page, path)
+  const routes = [
+    ...['/', ...sections.map((section) => section.path), '/index', '/cv', '/projects/rena-seulgi-jang', '/projects/hori-and-kkachi'].map(path => ({ path, language: 'en' as const })),
+    ...['/', '/writing', '/about', '/projects/rena-seulgi-jang'].map(path => ({ path, language: 'ko' as const })),
+  ]
+  for (const { path, language } of routes) {
+    await goTo(page, path, language)
     await page.evaluate(() => document.fonts.ready)
     const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
     issues.push(...result.violations.map((violation) => ({
-      path,
+      path: `/${language}${path}`,
       id: violation.id,
       impact: violation.impact,
       nodes: violation.nodes.map((node) => ({ target: node.target as string[], failureSummary: node.failureSummary })),

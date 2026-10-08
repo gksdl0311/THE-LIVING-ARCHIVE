@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
-// These browser-only fixtures exercise empty-at-launch content systems without
-// adding invented paintings, publications or contact details to the website.
+// Browser-only fixtures exercise missing-asset content systems without adding
+// invented paintings, publications or contact details to the website.
 test.beforeEach(async ({ page }) => {
   await page.route('**/src/content/archive.ts*', async route => {
     const response = await route.fetch()
@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
       site.artistStatement='A browser-only artist statement for functional validation.';
       articles.push({id:'test-essay',number:'W—TEST',title:'생각을 담은 글',date:'2026-10-08',category:'Essays',excerpt:'테스트 글입니다.',language:'ko',body:['한국어 본문이 올바르게 표시됩니다.','This paragraph checks the editorial reading layout.'],featured:true});
       articles.push({id:'test-external',number:'W—TEST2',title:'External test piece',date:'2026-10-08',category:'Film, Art & Culture',excerpt:'An external-publication fixture.',platform:'Test publication',externalUrl:'https://example.com/test-article'});
+      articles.push({id:'test-substack',number:'S—TEST',title:'Browser-only Substack fixture',date:'2026-10-08',category:'Business & Brands',excerpt:'An image-free external-publication fixture.',platform:'Substack · The Business Behind It',language:'en',originalLanguage:'en',externalUrl:'https://example.com/test-substack'});
       journalEntries.push({id:'test-note',title:'A test note',date:'2026-10-08',category:'Test category',body:['A browser-only journal paragraph.'],image:'/test-fixture.svg',imageAlt:'Fixture journal image'});
       site.cvUrl='/test-cv.pdf';
     `
@@ -20,7 +21,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('original artwork filters, metadata and process galleries work with supplied content', async ({ page }) => {
-  await page.goto('/#/art')
+  await page.goto('/#/en/art')
   await expect(page.getByText('A browser-only artist statement')).toBeVisible()
   await page.getByRole('button', { name:'Test collection', exact:true }).click()
   await expect(page.getByRole('heading', { name:'Test artwork', exact:true })).toBeVisible()
@@ -35,23 +36,40 @@ test('original artwork filters, metadata and process galleries work with supplie
 })
 
 test('Korean writing, on-site articles and external publications work', async ({ page }) => {
-  await page.goto('/#/writing')
+  await page.goto('/#/en/writing')
   await page.getByRole('button', {name:'Essays', exact:true}).click()
   await expect(page.getByRole('heading', {name:'External test piece'})).toHaveCount(0)
   await page.getByRole('link', {name:'생각을 담은 글', exact:true}).click()
   await expect(page.getByText('한국어 본문이 올바르게 표시됩니다.', {exact:true})).toBeVisible()
   await expect(page.getByText('1 min read', {exact:true})).toBeVisible()
-  await expect(page.locator('.detail-article')).toHaveAttribute('lang','ko')
-  await page.goto('/#/writing/test-external')
+  await expect(page.locator('.detail-article')).toHaveAttribute('lang','en')
+  await expect(page.locator('.detail-article-body > p').first()).toHaveAttribute('lang','ko')
+  await page.goto('/#/en/writing/test-external')
   await expect(page.getByRole('link', {name:/Read the full piece/})).toHaveAttribute('href','https://example.com/test-article')
 })
 
 test('journal dates and CV links render correctly once supplied', async ({ page }) => {
-  await page.goto('/#/journal')
+  await page.goto('/#/en/journal')
   await page.getByRole('link', {name:/A test note/}).click()
   await expect(page.getByText('8 October 2026', {exact:true})).toBeVisible()
   await expect(page.getByRole('img', {name:'Fixture journal image'})).toBeVisible()
   await expect(page.getByText('A browser-only journal paragraph.',{exact:true})).toBeVisible()
-  await page.goto('/#/cv')
+  await page.goto('/#/en/cv')
   await expect(page.getByRole('link',{name:/View CV/})).toHaveAttribute('href','/test-cv.pdf')
+})
+
+test('image-free Substack entries keep their English text in both website languages', async ({ page }) => {
+  for (const locale of ['en', 'ko']) {
+    await page.goto(`/#/${locale}/writing?source=Substack`)
+    const row = page.locator('.collection-article-list > article')
+    await expect(row).toHaveCount(1)
+    const heading = row.getByRole('heading', { name: /Browser-only Substack fixture/ })
+    await expect(heading).toHaveAttribute('lang', 'en')
+    await expect(row.locator('p')).toHaveText('An image-free external-publication fixture.')
+    await expect(row.locator('p')).toHaveAttribute('lang', 'en')
+    await expect(heading.getByRole('link')).toHaveAttribute('href', 'https://example.com/test-substack')
+    await expect(heading.getByRole('link')).toHaveAttribute('target', '_blank')
+    await expect(page.getByRole('main').getByRole('img')).toHaveCount(0)
+    await expect(row).toContainText(locale === 'ko' ? '영어 원문' : 'English original')
+  }
 })

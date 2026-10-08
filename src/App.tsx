@@ -1,5 +1,6 @@
 import { useEffect, useRef, lazy, Suspense } from 'react'
-import { Routes, Route, useLocation, Link } from 'react-router-dom'
+import { Routes, Route, useLocation, useParams, Navigate } from 'react-router-dom'
+import { LocaleLink as Link, useLanguage, isLanguage, withoutLanguage } from './i18n'
 import { motion } from 'motion/react'
 import { Navigation } from './components/Navigation'
 import { Footer } from './components/Footer'
@@ -33,11 +34,25 @@ const pageMeta: Record<string, {title:string;description:string}> = {
 
 function RouteEffects() {
   const { pathname } = useLocation()
+  const { language, text, localize } = useLanguage()
   const previous = useRef(pathname)
   useEffect(() => {
-    const segments = pathname.split('/')
-    const item = segments[1] === 'projects' ? projects.find(p=>p.id===segments[2]) : segments[1] === 'art' ? artworks.find(a=>a.id===segments[2]) : segments[1] === 'writing' ? articles.find(a=>a.id===segments[2]) : journalEntries.find(j=>j.id===segments[2])
-    const meta = pageMeta[pathname] || (item ? {title:`${item.title} — The Living Archive`,description:'description' in item ? item.description : 'excerpt' in item ? item.excerpt : item.title} : {title:'Not found — The Living Archive',description:'Find your way back through the archive index.'})
+    const plainPath = withoutLanguage(pathname)
+    const segments = plainPath.split('/')
+    const originalItem = segments[1] === 'projects' ? projects.find(p=>p.id===segments[2]) : segments[1] === 'art' ? artworks.find(a=>a.id===segments[2]) : segments[1] === 'writing' ? articles.find(a=>a.id===segments[2]) : journalEntries.find(j=>j.id===segments[2])
+    const item = originalItem ? localize(originalItem) : undefined
+    const koreanMeta: Record<string, {title:string;description:string}> = {
+      '/':{title:'Hanyee Jang — 살아가는 아카이브',description:'예술, 생각, 작업, 글 그리고 다양한 호기심. Hanyee Jang의 계속 자라나는 개인 아카이브.'},
+      '/about':{title:'소개 — Hanyee Jang',description:'아카이브 뒤의 사람: 배움과 경험, 예술과 일, 생각을 넘나드는 삶.'},
+      '/projects':{title:'프로젝트 — 살아가는 아카이브',description:'Hanyee Jang의 웹사이트, 커뮤니케이션, 리서치와 창작 프로젝트.'},
+      '/art':{title:'그림 — 살아가는 아카이브',description:'직접 그린 작품과 한국 민화를 새롭게 해석하는 갤러리.'},
+      '/writing':{title:'글 — 살아가는 아카이브',description:'Naver 블로그와 The Business Behind It의 글을 모은 서가.'},
+      '/journal':{title:'기록 — 살아가는 아카이브',description:'삶과 문화, 작은 호기심을 담는 개인 기록.'},
+      '/contact':{title:'연락 — Hanyee Jang',description:'일과 창작의 기회, 협업과 흥미로운 대화.'},
+      '/index':{title:'목차 — 살아가는 아카이브',description:'Hanyee Jang의 컬렉션과 공개된 작업을 둘러보는 목차.'},
+      '/cv':{title:'이력 — Hanyee Jang',description:'Hanyee Jang의 학력과 경험.'},
+    }
+    const meta = (language === 'ko' ? koreanMeta[plainPath] : pageMeta[plainPath]) || (item ? {title:`${item.title} — ${text('The Living Archive','살아가는 아카이브')}`,description:'description' in item ? item.description : 'excerpt' in item ? item.excerpt : item.title} : {title:text('Not found — The Living Archive','페이지를 찾을 수 없어요 — 살아가는 아카이브'),description:text('Find your way back through the archive index.','목차에서 아카이브로 돌아가는 길을 찾아보세요.')})
     document.title = meta.title
     document.querySelector('meta[name="description"]')?.setAttribute('content',meta.description)
     document.querySelector('meta[property="og:title"]')?.setAttribute('content',meta.title)
@@ -47,13 +62,27 @@ function RouteEffects() {
       document.getElementById('main-content')?.focus({preventScroll:true})
       previous.current = pathname
     }
-  }, [pathname])
+  }, [pathname, language, text, localize])
   return null
+}
+
+function LegacyRedirect() {
+  const { pathname, search } = useLocation()
+  const { path } = useLanguage()
+  return <Navigate replace to={`${path(pathname)}${search}`}/>
+}
+
+function SiteRoutes() {
+  const { locale } = useParams()
+  const { text } = useLanguage()
+  if (!isLanguage(locale)) return <LegacyRedirect/>
+  return <Routes>
+    <Route index element={<HomePage/>}/><Route path="about" element={<AboutPage/>}/><Route path="projects" element={<ProjectsPage/>}/><Route path="projects/:id" element={<ProjectDetailPage/>}/><Route path="art" element={<ArtPage/>}/><Route path="art/:id" element={<ArtworkDetailPage/>}/><Route path="writing" element={<WritingPage/>}/><Route path="writing/:id" element={<ArticleDetailPage/>}/><Route path="journal" element={<JournalPage/>}/><Route path="journal/:id" element={<JournalDetailPage/>}/><Route path="contact" element={<ContactPage/>}/><Route path="cv" element={<CvPage/>}/><Route path="index" element={<IndexPage/>}/><Route path="*" element={<div className="page-shell not-found"><SectionHeader eyebrow={text('OUTSIDE THE COLLECTION','컬렉션 바깥에서')} title={text('A little lost?','길을 잃었나요?')} description={text('This page hasn’t found its place in the archive. The index will help you find your way.','이 페이지는 아직 아카이브에서 자리를 찾지 못했어요. 목차에서 길을 찾아보세요.')}/><Link className="button button-dark" to="/index">{text('Back to the index ↗','목차로 돌아가기 ↗')}</Link></div>}/>
+  </Routes>
 }
 
 export function App() {
   const { pathname } = useLocation()
-  return <><a href="#main-content" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main-content')?.focus()}}>Skip to content</a><Navigation/><RouteEffects/><main id="main-content" tabIndex={-1}><motion.div key={pathname} initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.24}}><Suspense fallback={<div className="page-shell route-loading" role="status">Opening the archive…</div>}><Routes>
-    <Route path="/" element={<HomePage/>}/><Route path="/about" element={<AboutPage/>}/><Route path="/projects" element={<ProjectsPage/>}/><Route path="/projects/:id" element={<ProjectDetailPage/>}/><Route path="/art" element={<ArtPage/>}/><Route path="/art/:id" element={<ArtworkDetailPage/>}/><Route path="/writing" element={<WritingPage/>}/><Route path="/writing/:id" element={<ArticleDetailPage/>}/><Route path="/journal" element={<JournalPage/>}/><Route path="/journal/:id" element={<JournalDetailPage/>}/><Route path="/contact" element={<ContactPage/>}/><Route path="/cv" element={<CvPage/>}/><Route path="/index" element={<IndexPage/>}/><Route path="*" element={<div className="page-shell not-found"><SectionHeader eyebrow="OUTSIDE THE COLLECTION" title="A little lost?" description="This page hasn’t found its place in the archive. The index will help you find your way."/><Link className="button button-dark" to="/index">Back to the index ↗</Link></div>}/>
-  </Routes></Suspense></motion.div></main><Footer/></>
+  const { text } = useLanguage()
+  return <><a href="#main-content" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main-content')?.focus()}}>{text('Skip to content','본문으로 건너뛰기')}</a><Navigation/><RouteEffects/><main id="main-content" tabIndex={-1}><motion.div key={pathname} initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.24}}><Suspense fallback={<div className="page-shell route-loading" role="status">{text('Opening the archive…','아카이브를 여는 중…')}</div>}><Routes><Route path="/:locale/*" element={<SiteRoutes/>}/><Route path="*" element={<LegacyRedirect/>}/></Routes></Suspense></motion.div></main><Footer/></>
 }

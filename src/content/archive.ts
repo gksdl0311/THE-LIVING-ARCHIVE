@@ -5,6 +5,8 @@
  * projects remain visible as plans; Surprise Me must only use published work.
  * Put original images and PDFs in public/, then reference them with / paths.
  */
+import { naverArticles } from './naver'
+import { projectTranslations, experienceTranslations, educationTranslations, currentTranslations } from './translations'
 
 export type ProjectCategory =
   | 'Marketing & Communications'
@@ -21,6 +23,13 @@ export interface Translation {
   description?: string
   excerpt?: string
   body?: string[]
+  sections?: { title: string; body: string }[]
+  organisation?: string
+  role?: string
+  institution?: string
+  degree?: string
+  label?: string
+  text?: string
 }
 
 export interface Localizable {
@@ -69,6 +78,9 @@ export interface Artwork extends Localizable {
 }
 
 export interface Article extends Localizable {
+  sourceId?: string
+  originalLanguage?: 'en' | 'ko'
+  tags?: string[]
   id: string
   number: string
   title: string
@@ -91,14 +103,14 @@ export interface JournalEntry extends Localizable {
   imageAlt?: string
 }
 
-export interface Experience {
+export interface Experience extends Localizable {
   organisation: string
   role: string
   period: string
   description?: string
 }
 
-export interface Education {
+export interface Education extends Localizable {
   institution: string
   degree: string
   period?: string
@@ -115,7 +127,7 @@ export interface Exhibition {
   venue: string
 }
 
-export interface CurrentNote {
+export interface CurrentNote extends Localizable {
   label: string
   text: string
   href?: string
@@ -140,6 +152,8 @@ export const site: SiteConfig = {
   cvUrl: null,
   links: [
     { label: 'Instagram · @paintwithhanyee', url: 'https://www.instagram.com/paintwithhanyee/' },
+    { label: 'Naver Blog · @gksdl0311', url: 'https://blog.naver.com/gksdl0311' },
+    { label: 'Substack · The Business Behind It', url: 'https://thebusinessbehindit.substack.com' },
   ],
 }
 
@@ -158,7 +172,7 @@ export const articleCategories: string[] = [
   'Other Writing',
 ]
 
-export const projects: Project[] = [
+export const projects: Project[] = ([
   {
     id: 'rena-seulgi-jang',
     number: 'P—001',
@@ -278,16 +292,16 @@ export const projects: Project[] = [
       },
     ],
   },
-]
+ ] satisfies Project[]).map(project => ({ ...project, translations: { ko: projectTranslations[project.id] } }))
 
 // Keep these collections empty until real content and original assets exist.
 export const artworks: Artwork[] = []
-export const articles: Article[] = []
+export const articles: Article[] = [...naverArticles].sort((a,b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
 export const journalEntries: JournalEntry[] = []
 export const skills: SkillGroup[] = []
 export const exhibitions: Exhibition[] = []
 
-export const experiences: Experience[] = [
+export const experiences: Experience[] = ([
   {
     organisation: 'Vistex',
     role: 'Client Services Administrator Intern',
@@ -298,16 +312,16 @@ export const experiences: Experience[] = [
     role: 'Marketing Associate',
     period: '2026–2027',
   },
-]
+ ] satisfies Experience[]).map(item => ({ ...item, translations: { ko: experienceTranslations[item.organisation] } }))
 
-export const education: Education[] = [
+export const education: Education[] = ([
   {
     institution: 'King’s College London',
     degree: 'BSc International Management',
   },
-]
+ ] satisfies Education[]).map(item => ({ ...item, translations: { ko: educationTranslations[item.institution] } }))
 
-export const currently: CurrentNote[] = [
+export const currently: CurrentNote[] = ([
   {
     label: 'An open collection',
     text: 'This archive is growing. New work, paintings and words will find a home here.',
@@ -322,4 +336,4 @@ export const currently: CurrentNote[] = [
     text: 'The Rena Seulgi Jang website brings together English, Korean and German.',
     href: '/projects/rena-seulgi-jang',
   },
-]
+ ] satisfies CurrentNote[]).map(item => ({ ...item, translations: { ko: currentTranslations[item.label] } }))

@@ -9,9 +9,12 @@ import '@fontsource/dm-sans/400.css'
 import '@fontsource/dm-sans/500.css'
 import '@fontsource/dm-sans/600.css'
 import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/noto-serif-kr/500.css'
+import '@fontsource/noto-sans-kr/400.css'
 import './styles.css'
 import { App } from './App'
+import { LanguageProvider } from './i18n'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><HashRouter><MotionConfig reducedMotion="user"><App /></MotionConfig></HashRouter></React.StrictMode>,
+  <React.StrictMode><HashRouter><LanguageProvider><MotionConfig reducedMotion="user"><App /></MotionConfig></LanguageProvider></HashRouter></React.StrictMode>,
 )

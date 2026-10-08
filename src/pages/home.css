@@ -1,0 +1,67 @@
+/* Published titles keep their authored language and fit the editorial preview. */
+.home-writing-card.has-article h2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  font-size: clamp(28px, 2.6vw, 40px);
+  line-height: 1.16;
+  overflow-wrap: anywhere;
+}
+.home-writing-card.has-article h2:lang(ko) { line-height: 1.5; letter-spacing: -.045em; }
+.home-writing-card.has-article p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; overflow-wrap: anywhere; }
+.home-writing-card.has-article h2:lang(en) { font-family: 'Cormorant Garamond', Georgia, serif; }
+.home-writing-card.has-article p:lang(en) { font-family: 'DM Sans', Arial, sans-serif; }
+
+.home-page-ko .hero-copy h1 { font-size: clamp(58px, 5.8vw, 87px); line-height: 1.22; letter-spacing: -.075em; word-break: keep-all; }
+.home-page-ko .hero-copy h1 i { letter-spacing: -.075em; }
+.home-page-ko .hero-pretitle { font-size: 23px; margin-bottom: 10px; }
+.home-page-ko .hero-description p { line-height: 1.9; }
+.home-page-ko .hero-fineprint { line-height: 1.9; }
+.home-page-ko .art-object-type { font-size: 36px; line-height: 1.4; margin-top: 10px; }
+.home-page-ko .writing-object-title { font-size: 22px; line-height: 1.35; }
+.home-page-ko .work-object-title { font-family: 'Cormorant Garamond', Georgia, serif; }
+.home-page-ko .work-object-title i { font-family: inherit; }
+.home-page-ko .collection-directory-link strong { font-size: 28px; line-height: 1.25; }
+.home-page-ko .home-section-title h2 { font-size: 45px; line-height: 1.45; letter-spacing: -.04em; }
+.home-page-ko .featured-project-copy h3 { line-height: 1.45; }
+.home-page-ko .gallery-preview-frame > span { font-size: 31px; line-height: 1.55; }
+.home-page-ko .home-art-card h2 { font-size: 31px; line-height: 1.45; }
+.home-page-ko .home-writing-card:not(.has-article) h2 { font-size: 39px; line-height: 1.45; }
+.home-page-ko .current-heading h2 { font-size: 33px; line-height: 1.5; }
+.home-page-ko .random-discovery h2 { font-size: 32px; line-height: 1.5; }
+.home-page-ko .random-discovery p { line-height: 1.8; }
+.home-page-ko .hero-buttons { flex-wrap: wrap; }
+
+@media (max-width: 1000px) and (min-width: 621px) {
+  .home-page-ko .hero-copy h1 { font-size: clamp(41px, 5.4vw, 58px); }
+  .home-page-ko .home-section-title h2 { font-size: 35px; }
+  .home-page-ko .collection-directory-link strong { font-size: 24px; }
+  .home-page-ko .gallery-preview-frame > span { font-size: 26px; }
+  .home-page-ko .home-art-card h2 { font-size: 26px; }
+  .home-page-ko .current-heading h2 { font-size: 28px; }
+  .home-page-ko .random-discovery h2 { font-size: 28px; }
+}
+@media (max-width: 620px) {
+  .home-page-ko .hero-copy h1 { font-size: clamp(45px, 11.2vw, 66px); }
+  .home-page-ko .hero-pretitle { font-size: 22px; }
+  .home-page-ko .art-object-frame { padding-top: 0; }
+  .home-page-ko .art-object-type { font-size: 30px; line-height: 1.25; margin-top: 0; }
+  .home-page-ko .collection-directory-link strong { font-size: 24px; white-space: nowrap; }
+  .home-page-ko .hero-buttons { gap: 12px 17px; }
+  .home-page-ko .hero-buttons .button { font-size: 10px; padding-inline: 13px; }
+  .home-page-ko .home-section-title h2 { font-size: 33px; }
+  .home-page-ko .home-section-title > .text-link { font-size: 9px; }
+  .home-page-ko .featured-project-copy h3 { font-size: 29px; }
+  .home-page-ko .current-heading h2 { font-size: 31px; }
+  .home-page-ko .random-discovery h2 { font-size: 27px; }
+  .home-page-ko .gallery-preview-frame > span { font-size: 29px; }
+  .home-writing-card.has-article h2 { font-size: 31px; }
+  .home-writing-card.has-article h2:lang(ko) { font-size: 27px; }
+}
+@media (max-width: 360px) {
+  .home-page-ko .hero-copy h1 { font-size: 43px; }
+  .home-page-ko .home-section-title h2 { font-size: 29px; }
+  .home-page-ko .collection-directory-link strong { font-size: 20px; }
+  .home-page-ko .random-discovery h2 { font-size: 25px; }
+}
