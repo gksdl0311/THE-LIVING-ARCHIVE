@@ -1,6 +1,8 @@
 import { test as base, expect, type Page } from '@playwright/test'
 import { articles, projects, site, type Article } from '../src/content/archive'
 import { naverArticles } from '../src/content/naver'
+import { naverTitleTranslations } from '../src/content/naver-translations'
+import { existsSync } from 'node:fs'
 
 type Locale = 'en' | 'ko'
 const preferenceKey = 'living-archive.language'
@@ -25,6 +27,14 @@ const test = base.extend<{ runtimeErrors: string[] }>({
     expect(errors, 'Bilingual routes must not throw browser errors').toEqual([])
   }, { auto: true }],
 })
+
+function displayedTitle(article: Article, locale: Locale) {
+  return locale === 'en' ? article.translations?.en?.title || article.title : article.title
+}
+
+function thumbnailUrl(path: string) {
+  return /^(https?:|data:|blob:)/.test(path) ? path : `${process.env.VITE_BASE_PATH || '/'}${path.replace(/^\//, '')}`
+}
 
 function hashUrl(page: Page) {
   return new URL(new URL(page.url()).hash.slice(1), 'https://archive.invalid')
@@ -74,10 +84,17 @@ async function expectNaverRows(page: Page, expected: Article[], locale: Locale) 
   for (const [index, article] of expected.entries()) {
     const row = rows.nth(index)
     const heading = row.getByRole('heading', { level: 2 })
-    await expect(heading).toHaveAttribute('lang', 'ko')
-    await expect(heading).toContainText(article.title)
-    await expect(row.locator('p')).toHaveText(article.excerpt)
-    await expect(row.locator('p')).toHaveAttribute('lang', 'ko')
+    await expect(heading).toHaveAttribute('lang', locale)
+    await expect(heading).toContainText(displayedTitle(article, locale))
+    const originalTitle = row.locator('.collection-article-original-title')
+    if (locale === 'en') {
+      await expect(originalTitle).toHaveText(article.title)
+      await expect(originalTitle).toHaveAttribute('lang', 'ko')
+    } else {
+      await expect(originalTitle).toHaveCount(0)
+    }
+    await expect(row.locator('.collection-article-excerpt')).toHaveText(article.excerpt)
+    await expect(row.locator('.collection-article-excerpt')).toHaveAttribute('lang', 'ko')
     await expect(row.locator('time')).toHaveAttribute('datetime', article.date)
     await expect(row).toContainText(locale === 'en' ? 'Korean original' : '한국어 원문')
     const original = heading.getByRole('link')
@@ -85,9 +102,46 @@ async function expectNaverRows(page: Page, expected: Article[], locale: Locale) 
     await expect(original).toHaveAttribute('target', '_blank')
     await expect(original).toHaveAttribute('rel', /noopener/)
     await expect(original).toHaveAttribute('rel', /noreferrer/)
+    const thumbnail = row.locator('.collection-article-thumbnail img')
+    if (article.thumbnail) {
+      await expect(thumbnail).toHaveAttribute('src', thumbnailUrl(article.thumbnail))
+      await expect(thumbnail).toHaveAttribute('alt', article.thumbnailAlt || '')
+      await expect(thumbnail).toHaveAttribute('loading', 'lazy')
+      await expect(thumbnail).toHaveAttribute('decoding', 'async')
+      await expect(row.locator('.collection-article-thumbnail')).toHaveAttribute('href', article.externalUrl!)
+    } else {
+      await expect(thumbnail).toHaveCount(0)
+      await expect(row).not.toHaveClass(/collection-article-with-thumbnail/)
+    }
   }
-  await expect(page.getByRole('main').getByRole('img')).toHaveCount(0)
+  await expect(page.getByRole('main').locator('.collection-article-thumbnail img')).toHaveCount(expected.filter(article => article.thumbnail).length)
 }
+
+test('every imported Naver post has an English title and retains its original publication metadata', async () => {
+  expect(naverArticles).toHaveLength(463)
+  expect(naverArticles.filter(article => article.thumbnail)).toHaveLength(461)
+  expect(naverArticles.filter(article => !article.thumbnail).map(article => article.sourceId).sort())
+    .toEqual(['222872509258', '223162695085'])
+  expect(Object.keys(naverTitleTranslations).sort()).toEqual(naverArticles.map(article => article.id).sort())
+  expect(new Set(naverArticles.map(article => article.sourceId)).size).toBe(naverArticles.length)
+  for (const original of naverArticles) {
+    const article = naver.find(entry => entry.id === original.id)!
+    expect(article.title).toBe(original.title)
+    expect(article.excerpt).toBe(original.excerpt)
+    expect(article.originalLanguage).toBe('ko')
+    expect(article.externalUrl).toBe(`https://blog.naver.com/gksdl0311/${original.sourceId}`)
+    const translation = article.translations?.en?.title
+    expect(translation).toBe(naverTitleTranslations[article.id])
+    expect(translation?.trim()).toBeTruthy()
+    expect(translation).not.toMatch(/[가-힣]/)
+    expect(translation).not.toBe(original.title)
+    if (article.thumbnailSourceUrl) {
+      expect(new URL(article.thumbnailSourceUrl).hostname).toMatch(/(^|\.)pstatic\.net$/)
+      expect(article.thumbnail).toMatch(/^\/naver\/\d+\.(jpg|png|gif|webp)$/)
+      expect(existsSync(`public${article.thumbnail}`), 'Original cover must be included in the static build').toBe(true)
+    }
+  }
+})
 
 for (const locale of ['en', 'ko'] as const) {
   test(`${locale} navigation reaches localized sections, index and CV`, async ({ page }) => {
@@ -115,15 +169,7 @@ for (const locale of ['en', 'ko'] as const) {
       : locale === 'en' ? 'A document, to come.' : '한 장의 기록을 준비하며.')
   })
 
-  test(`${locale} writing displays real Naver originals and source counts`, async ({ page }) => {
-    expect(naverArticles.length, 'Import the full public archive, not only the 50-post RSS feed').toBeGreaterThanOrEqual(463)
-    expect(new Set(naverArticles.map(article => article.sourceId)).size).toBe(naverArticles.length)
-    for (const article of naverArticles) {
-      expect(article.originalLanguage).toBe('ko')
-      expect(article.language).toBe('ko')
-      expect(article.externalUrl).toBe(`https://blog.naver.com/gksdl0311/${article.sourceId}`)
-      expect(article.title).toMatch(/[가-힣]/)
-    }
+  test(`${locale} writing displays Naver covers, localized titles and source counts`, async ({ page }) => {
     await page.goto(`/#/${locale}/writing`)
     await expectLanguage(page, locale)
     const sources = sourceFilters(page, locale)
@@ -155,8 +201,14 @@ for (const locale of ['en', 'ko'] as const) {
     await searchInput(page, locale).fill(query)
     await expect.poll(() => hashUrl(page).searchParams.get('page')).toBeNull()
     await expect.poll(() => hashUrl(page).searchParams.get('q')).toBe(query)
-    await expect(writingRows(page).getByRole('heading', { name: query })).toBeVisible()
-    await expect(writingRows(page).first().locator('p')).toHaveAttribute('lang', 'ko')
+    await expect(writingRows(page).getByRole('heading').filter({ hasText: displayedTitle(naver[0], locale) })).toBeVisible()
+    await expect(writingRows(page).first().locator('.collection-article-excerpt')).toHaveAttribute('lang', 'ko')
+    // Either language of the title must locate the same original publication.
+    const englishQuery = naver[0].translations!.en!.title!
+    await searchInput(page, locale).fill(englishQuery)
+    await expect.poll(() => hashUrl(page).searchParams.get('q')).toBe(englishQuery)
+    await expect(writingRows(page)).toHaveCount(1)
+    await expect(writingRows(page).getByRole('heading').filter({ hasText: displayedTitle(naver[0], locale) })).toBeVisible()
 
     await searchInput(page, locale).fill('no-such-archive-entry-7e1d48')
     await expect(writingRows(page)).toHaveCount(0)
@@ -196,14 +248,27 @@ test('switching language keeps project and Korean publication detail addresses',
     if (locale === 'ko') await page.getByRole('link', { name: '한국어로 보기', exact: true }).click()
     await expectPath(page, `/${locale}/writing/${naver[0].id}`)
     await expectLanguage(page, locale)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(naver[0].title)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('lang', 'ko')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(displayedTitle(naver[0], locale))
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('lang', locale)
+    const originalTitle = page.locator('.detail-article-original-title')
+    if (locale === 'en') {
+      await expect(originalTitle).toHaveText(naver[0].title)
+      await expect(originalTitle).toHaveAttribute('lang', 'ko')
+    } else {
+      await expect(originalTitle).toHaveCount(0)
+    }
     await expect(page.locator('.detail-deck')).toHaveText(naver[0].excerpt)
     await expect(page.locator('.detail-deck')).toHaveAttribute('lang', 'ko')
     const original = page.getByRole('link', { name: locale === 'en' ? /Read the full piece on Naver Blog/ : /네이버 블로그에서 원문 읽기/ })
     await expect(original).toHaveAttribute('href', naver[0].externalUrl!)
     await expect(original).toHaveAttribute('target', '_blank')
-    await expect(page.getByRole('main').getByRole('img')).toHaveCount(0)
+    const thumbnail = page.locator('.detail-article-thumbnail img')
+    if (naver[0].thumbnail) {
+      await expect(thumbnail).toHaveAttribute('src', thumbnailUrl(naver[0].thumbnail))
+      await expect(thumbnail).toHaveAttribute('loading', 'lazy')
+    } else {
+      await expect(thumbnail).toHaveCount(0)
+    }
   }
 })
 
@@ -222,7 +287,8 @@ test('language switching preserves writing source, category, search and current 
   const params = new URLSearchParams({ source: 'Naver Blog', category: selection.category, q: selection.query, page: '2' })
   await page.goto(`/#/en/writing?${params}`)
   await expect(writingRows(page)).toHaveCount(pageSize)
-  const titles = await writingRows(page).getByRole('heading', { level: 2 }).allTextContents()
+  const selectedArticles = naver.filter(article => article.category === selection.category && article.tags?.includes(selection.query)).slice(pageSize, pageSize * 2)
+  await expectNaverRows(page, selectedArticles, 'en')
   await page.getByRole('link', { name: '한국어로 보기', exact: true }).click()
   await expectPath(page, '/ko/writing')
   await expectLanguage(page, 'ko')
@@ -232,14 +298,31 @@ test('language switching preserves writing source, category, search and current 
   await expect(searchInput(page, 'ko')).toHaveValue(selection.query)
   await expect(sourceFilters(page, 'ko').getByRole('button').filter({ hasText: '네이버 블로그' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('navigation', { name: '글 아카이브 페이지', exact: true }).locator('[aria-current="page"]')).toHaveText('2')
-  const koreanTitles = await writingRows(page).getByRole('heading', { level: 2 }).allTextContents()
-  expect(koreanTitles.map(title => title.replace(' (새 탭에서 열립니다)', '')))
-    .toEqual(titles.map(title => title.replace(' (opens in a new tab)', '')))
+  await expectNaverRows(page, selectedArticles, 'ko')
   await page.getByRole('link', { name: 'View website in English', exact: true }).click()
   await expectPath(page, '/en/writing')
   for (const [key, value] of params) {
     await expect.poll(() => hashUrl(page).searchParams.get(key)).toBe(value)
   }
+  await expectNaverRows(page, selectedArticles, 'en')
+})
+
+test('Naver covers fit the archive at narrow mobile widths', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 })
+  await page.goto('/#/en/writing?source=Naver+Blog')
+  const article = writingRows(page).first()
+  const thumbnail = article.locator('.collection-article-thumbnail')
+  await expect(thumbnail).toBeVisible()
+  const image = thumbnail.locator('img')
+  await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  const imageBounds = await thumbnail.boundingBox()
+  const copyBounds = await article.locator('.collection-article-copy').boundingBox()
+  expect(imageBounds).not.toBeNull()
+  expect(copyBounds).not.toBeNull()
+  expect(imageBounds!.width / imageBounds!.height).toBeCloseTo(4 / 3, 1)
+  expect(copyBounds!.y).toBeGreaterThanOrEqual(imageBounds!.y + imageBounds!.height)
+  const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: window.innerWidth }))
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.viewport + 1)
 })
 
 test('saved preference supplies the default locale while explicit URLs take precedence', async ({ page }) => {
@@ -265,6 +348,9 @@ test('legacy addresses retain their destination and writing parameters during lo
   await expectPath(page, '/en/about')
   await expectLanguage(page, 'en')
   await page.getByRole('link', { name: '한국어로 보기', exact: true }).click()
+  await expectPath(page, '/ko/about')
+  await expectLanguage(page, 'ko')
+  await expect.poll(() => page.evaluate(key => localStorage.getItem(key), preferenceKey)).toBe('ko')
   const query = new URLSearchParams({ source: 'Naver Blog', q: '런던', page: '2' })
   for (const route of ['/about', `/projects/${publishedProject.id}`, `/writing?${query}`]) {
     await page.goto(`/#${route}`)

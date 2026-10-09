@@ -6,6 +6,7 @@
  * Put original images and PDFs in public/, then reference them with / paths.
  */
 import { naverArticles } from './naver'
+import { naverTitleTranslations } from './naver-translations'
 import { projectTranslations, experienceTranslations, educationTranslations, currentTranslations } from './translations'
 
 export type ProjectCategory =
@@ -81,6 +82,10 @@ export interface Article extends Localizable {
   sourceId?: string
   originalLanguage?: 'en' | 'ko'
   tags?: string[]
+  /** Original publication cover, stored locally or referenced on its source CDN. */
+  thumbnail?: string
+  thumbnailAlt?: string
+  thumbnailSourceUrl?: string
   id: string
   number: string
   title: string
@@ -298,7 +303,10 @@ export const projects: Project[] = ([
 
 // Keep these collections empty until real content and original assets exist.
 export const artworks: Artwork[] = []
-export const articles: Article[] = [...naverArticles].sort((a,b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
+export const articles: Article[] = naverArticles.map(article => {
+  const title = naverTitleTranslations[article.id]
+  return title ? { ...article, translations: { ...article.translations, en: { ...article.translations?.en, title } } } : article
+}).sort((a,b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
 export const journalEntries: JournalEntry[] = []
 export const skills: SkillGroup[] = []
 export const exhibitions: Exhibition[] = []

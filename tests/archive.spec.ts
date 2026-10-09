@@ -191,9 +191,11 @@ test('writing previews can be narrowed by source, paginated, searched and reset'
   await expect(main.locator('[aria-live="polite"]')).toHaveText(`${naverArticles.length} pieces · showing 17–32`)
   await expect(main.getByRole('article').first().getByRole('heading', { level: 2 })).not.toHaveText(firstTitle)
   await page.getByRole('searchbox', { name: 'Search titles, excerpts and tags', exact: true }).fill(naverArticles[0].title)
-  await expect(main.getByRole('heading', { level: 2 }).filter({ hasText: naverArticles[0].title })).toBeVisible()
+  const firstArticle = articles.find(article => article.id === naverArticles[0].id)!
+  await expect(main.getByRole('heading', { level: 2 }).filter({ hasText: firstArticle.translations!.en!.title! })).toBeVisible()
+  await expect(main.locator('.collection-article-original-title')).toHaveText(naverArticles[0].title)
   await expect(main.getByRole('article')).toHaveCount(1)
-  await expect(main.getByRole('img')).toHaveCount(0)
+  await expect(main.getByRole('img')).toHaveCount(firstArticle.thumbnail ? 1 : 0)
   await page.getByRole('button', { name: 'Reset filters', exact: true }).click()
   await expect(sourceFilters.getByRole('button', { name: /^All sources/ })).toHaveAttribute('aria-pressed', 'true')
   await expect(main.locator('[aria-live="polite"]')).toHaveText(`${articles.length} pieces · showing 1–16`)

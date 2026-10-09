@@ -125,10 +125,47 @@ function languageLabel(article: Article, text: Text) {
   return language === 'ko' ? text('Korean original', '한국어 원문') : language === 'en' ? text('English original', '영어 원문') : null;
 }
 
-/** Titles, excerpts and full text from external publications retain their source language. */
-function localizedArticle(article: Article, localize: (item: Article) => Article) {
+/** Naver headings may be translated; previews and published text remain original. */
+function localizedArticle(article: Article, localize: (item: Article) => Article, language: 'en' | 'ko') {
   const localized = localize(article);
-  return article.originalLanguage && article.externalUrl ? { ...localized, title: article.title, excerpt: article.excerpt, body: article.body } : localized;
+  const translatedTitle = publication(article) === 'Naver Blog' && language === 'en' ? article.translations?.en?.title : undefined;
+  return article.originalLanguage && article.externalUrl ? { ...localized, title: translatedTitle || article.title, excerpt: article.excerpt, body: article.body } : localized;
+}
+
+function articleTitleLanguage(article: Article, language: 'en' | 'ko') {
+  return publication(article) === 'Naver Blog' && language === 'en' && article.translations?.en?.title ? 'en' : articleLanguage(article, language);
+}
+
+function useNaverThumbnail(article?: Article) {
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const source = article && publication(article) === 'Naver Blog' && article.thumbnail ? assetUrl(article.thumbnail) : null;
+  const imageKey = `${article?.id}:${source}`;
+  return {
+    source: imageKey === failedImage ? null : source,
+    onError: () => setFailedImage(imageKey),
+  };
+}
+
+function NaverThumbnail({ article, image, className, detail = false }: { article: Article; image: ReturnType<typeof useNaverThumbnail>; className: string; detail?: boolean }) {
+  const { text, language } = useLanguage();
+  if (!image.source) return null;
+  const title = language === 'en' ? article.translations?.en?.title || article.title : article.title;
+  const thumbnail = <img key={image.source} src={image.source} alt={article.thumbnailAlt || ''} lang={article.originalLanguage || article.language} loading="lazy" decoding="async" width={detail ? 800 : 360} height={detail ? 600 : 270} onError={image.onError} />;
+  return article.externalUrl ? <a className={className} href={article.externalUrl} target="_blank" rel="noopener noreferrer" aria-label={text(`Open the original post: ${title} (opens in a new tab)`, `원문 읽기: ${title} (새 탭에서 열립니다)`)}>{thumbnail}</a> : <div className={className}>{thumbnail}</div>;
+}
+
+function WritingArticleRow({ original }: { original: Article }) {
+  const { text, language, localize, category } = useLanguage();
+  const article = localizedArticle(original, localize, language);
+  const image = useNaverThumbnail(original);
+  const time = readingTime(article, text);
+  const originalLanguage = languageLabel(original, text);
+  const translatedTitle = publication(original) === 'Naver Blog' && article.title !== original.title;
+  return <article className={image.source ? 'collection-article-with-thumbnail' : undefined}>
+    <span className="mono collection-article-number">{article.number}</span>
+    <NaverThumbnail article={original} image={image} className="collection-article-thumbnail" />
+    <div className="collection-article-copy"><div className="collection-article-metadata mono"><span>{category(article.category)}</span><time dateTime={article.date}>{readableDate(article.date, language)}</time><span>{sourceLabel(publication(article), text)}</span>{originalLanguage && <span className="collection-original-language">{originalLanguage}</span>}{time && <span>{time}</span>}</div><h2 className="serif" lang={articleTitleLanguage(original, language)}>{article.externalUrl ? <ExternalLink href={article.externalUrl} className="collection-article-title-link">{article.title}</ExternalLink> : <Link to={`/writing/${article.id}`}>{article.title}</Link>}</h2>{translatedTitle && <p className="collection-article-original-title" lang="ko">{original.title}</p>}<p className="collection-article-excerpt" lang={articleLanguage(original, language)}>{article.excerpt}</p><div className="collection-article-row-footer">{article.tags && article.tags.length > 0 && <ul className="collection-article-tags" aria-label={text('Article tags', '글 태그')}>{article.tags.slice(0, 3).map((tag) => <li key={tag}>#{tag}</li>)}</ul>}<Link className="text-link" to={`/writing/${article.id}`}>{article.externalUrl ? text('Archive note', '아카이브 노트') : text('Read the piece', '글 읽기')}<ArrowRight size={14} aria-hidden="true" /><span className="sr-only"> — {article.title}</span></Link></div></div>
+  </article>;
 }
 
 function paginationPages(current: number, total: number): Array<number | 'ellipsis'> {
@@ -139,7 +176,7 @@ function paginationPages(current: number, total: number): Array<number | 'ellips
 }
 
 export function WritingPage() {
-  const { text, language, localize, category } = useLanguage();
+  const { text } = useLanguage();
   const [params, setParams] = useSearchParams();
   const sources = useMemo(() => [...new Set(['Substack', 'Naver Blog', ...articles.map(publication)])], []);
   const categories = useMemo(() => [...new Set([...articleCategories, ...articles.map((article) => article.category)])], []);
@@ -171,14 +208,9 @@ export function WritingPage() {
     <div className="collection-reading-room"><span className="mono">{text('The reading room', '읽는 공간')}</span><span className="serif">{text('Words have a way of making room.', '문장은 자기만의 자리를 만듭니다.')}</span><span className="mono">{text('English & Korean originals', '영어와 한국어 원문')}</span></div>
     <div className="collection-writing-controls"><div className="collection-source-toolbar"><div className="collection-source-filters" role="group" aria-label={text('Filter writing by source', '출처별 글 보기')}>{['All', ...sources].map((source) => <button className={`collection-source-filter ${selectedSource === source ? 'collection-source-active' : ''}`} type="button" key={source} aria-pressed={selectedSource === source} onClick={() => updateFilter('source', source)}>{sourceLabel(source, text)}<span className="mono">{source === 'All' ? articles.length : articles.filter((article) => publication(article) === source).length}</span></button>)}</div><div className="collection-writing-search"><Search size={17} aria-hidden="true" /><label className="sr-only" htmlFor="writing-search">{text('Search titles, excerpts and tags', '제목, 미리보기, 태그 검색')}</label><input id="writing-search" type="search" value={query} onChange={(event) => updateFilter('q', event.target.value)} placeholder={text('Find a thought…', '어떤 생각을 찾고 있나요?')} autoComplete="off" />{query && <button type="button" aria-label={text('Clear search', '검색어 지우기')} onClick={() => updateFilter('q', '')}><X size={16} aria-hidden="true" /></button>}</div></div><CollectionFilters categories={categories} selected={selectedCategory} onSelect={(value) => updateFilter('category', value)} label={text('Filter writing by category', '카테고리별 글 보기')} /></div>
     <div className="collection-writing-results-head" id="writing-results"><span className="mono" aria-live="polite" aria-atomic="true">{resultLabel}</span><span className="mono">{text('Newest first', '최신 글부터')}</span>{hasFilters && <button className="text-link" type="button" onClick={() => setParams(new URLSearchParams())}>{text('Reset filters', '필터 초기화')}<X size={13} aria-hidden="true" /></button>}</div>
-    {visible.length > 0 ? <div className="collection-article-list">{visible.map((original) => {
-      const article = localizedArticle(original, localize);
-      const time = readingTime(article, text);
-      const originalLanguage = languageLabel(original, text);
-      return <article key={article.id}><span className="mono collection-article-number">{article.number}</span><div><div className="collection-article-metadata mono"><span>{category(article.category)}</span><time dateTime={article.date}>{readableDate(article.date, language)}</time><span>{sourceLabel(publication(article), text)}</span>{originalLanguage && <span className="collection-original-language">{originalLanguage}</span>}{time && <span>{time}</span>}</div><h2 className="serif" lang={articleLanguage(original, language)}>{article.externalUrl ? <ExternalLink href={article.externalUrl} className="collection-article-title-link">{article.title}</ExternalLink> : <Link to={`/writing/${article.id}`}>{article.title}</Link>}</h2><p lang={articleLanguage(original, language)}>{article.excerpt}</p><div className="collection-article-row-footer">{article.tags && article.tags.length > 0 && <ul className="collection-article-tags" aria-label={text('Article tags', '글 태그')}>{article.tags.slice(0, 3).map((tag) => <li key={tag}>#{tag}</li>)}</ul>}<Link className="text-link" to={`/writing/${article.id}`}>{article.externalUrl ? text('Archive note', '아카이브 노트') : text('Read the piece', '글 읽기')}<ArrowRight size={14} aria-hidden="true" /><span className="sr-only"> — {article.title}</span></Link></div></div></article>;
-    })}</div> : <section className="collection-writing-empty" aria-labelledby="writing-empty-heading"><ArchiveLabel>{text('A little room between the words', '문장들 사이의 작은 여백')}</ArchiveLabel><h2 className="serif" id="writing-empty-heading">{articles.length === 0 ? text('The shelves are ready.', '첫 문장을 기다리고 있어요.') : text('No matching thoughts, yet.', '찾고 있는 생각이 아직 보이지 않네요.')}</h2><p>{articles.length === 0 ? text('Published essays, blog posts and reflections will find their place here as they are added.', '공개된 에세이와 블로그 글, 일상의 생각들을 하나씩 모아갈 예정입니다.') : text('Try another word, a different source, or give the whole collection a look.', '다른 단어나 출처를 선택해 보세요. 전체 글을 함께 둘러볼 수도 있어요.')}</p>{hasFilters && <button className="text-link" type="button" onClick={() => setParams(new URLSearchParams())}>{text('Browse all writing', '모든 글 둘러보기')}<ArrowRight size={17} aria-hidden="true" /></button>}</section>}
+    {visible.length > 0 ? <div className="collection-article-list">{visible.map((original) => <WritingArticleRow key={original.id} original={original} />)}</div> : <section className="collection-writing-empty" aria-labelledby="writing-empty-heading"><ArchiveLabel>{text('A little room between the words', '문장들 사이의 작은 여백')}</ArchiveLabel><h2 className="serif" id="writing-empty-heading">{articles.length === 0 ? text('The shelves are ready.', '첫 문장을 기다리고 있어요.') : text('No matching thoughts, yet.', '찾고 있는 생각이 아직 보이지 않네요.')}</h2><p>{articles.length === 0 ? text('Published essays, blog posts and reflections will find their place here as they are added.', '공개된 에세이와 블로그 글, 일상의 생각들을 하나씩 모아갈 예정입니다.') : text('Try another word, a different source, or give the whole collection a look.', '다른 단어나 출처를 선택해 보세요. 전체 글을 함께 둘러볼 수도 있어요.')}</p>{hasFilters && <button className="text-link" type="button" onClick={() => setParams(new URLSearchParams())}>{text('Browse all writing', '모든 글 둘러보기')}<ArrowRight size={17} aria-hidden="true" /></button>}</section>}
     {pageCount > 1 && <nav className="collection-pagination" aria-label={text('Writing archive pages', '글 아카이브 페이지')}><button className="collection-pagination-direction" type="button" disabled={page === 1} onClick={() => goToPage(page - 1)} aria-label={text('Previous page', '이전 페이지')}><ArrowLeft size={16} aria-hidden="true" /><span>{text('Previous', '이전')}</span></button><div className="collection-pagination-numbers">{paginationPages(page, pageCount).map((value, index) => value === 'ellipsis' ? <span key={`ellipsis-${index}`} aria-hidden="true">…</span> : <button type="button" key={value} className={page === value ? 'collection-pagination-current' : ''} aria-current={page === value ? 'page' : undefined} aria-label={text(`Go to page ${value}`, `${value}페이지로 이동`)} onClick={() => goToPage(value)}>{value}</button>)}</div><button className="collection-pagination-direction" type="button" disabled={page === pageCount} onClick={() => goToPage(page + 1)} aria-label={text('Next page', '다음 페이지')}><span>{text('Next', '다음')}</span><ArrowRight size={16} aria-hidden="true" /></button></nav>}
-    <p className="collection-writing-note">{text('Titles and previews stay in the language they were written in. Full pieces live with their original publications.', '제목과 미리보기는 쓰인 언어 그대로 담았습니다. 전체 글은 원래의 발행 공간에서 읽을 수 있어요.')}<br />{text('For the fragments between finished pieces, visit ', '완성된 글 사이의 조각들은 ')}<Link to="/journal" className="text-link">{text('the journal', '저널에서')}<ArrowUpRight size={15} aria-hidden="true" /></Link>{text('.', ' 만나보세요.')}</p>
+    <p className="collection-writing-note">{text('Naver titles are translated into English, with the Korean originals below. Previews retain their original language; full pieces live with their original publications.', '영문 사이트에서는 네이버 글 제목을 영어로 번역해 보여드려요. 미리보기는 원문 그대로 담았으며, 전체 글은 원래의 발행 공간에서 읽을 수 있어요.')}<br />{text('For the fragments between finished pieces, visit ', '완성된 글 사이의 조각들은 ')}<Link to="/journal" className="text-link">{text('the journal', '저널에서')}<ArrowUpRight size={15} aria-hidden="true" /></Link>{text('.', ' 만나보세요.')}</p>
   </div>;
 }
 
@@ -186,11 +218,13 @@ export function ArticleDetailPage() {
   const { id } = useParams();
   const { text, language, localize, category } = useLanguage();
   const original = articles.find((entry) => entry.id === id);
+  const image = useNaverThumbnail(original);
   if (!original) return <CollectionNotFound collection="Writing" href="/writing" />;
-  const article = localizedArticle(original, localize);
+  const article = localizedArticle(original, localize, language);
   const time = readingTime(article, text);
   const originalLanguage = languageLabel(original, text);
-  return <div className="page-shell detail-article" lang={language}><Link className="text-link detail-back" to="/writing"><ArrowLeft size={16} aria-hidden="true" />{text('Back to the library', '서재로 돌아가기')}</Link><header className="detail-article-heading"><ArchiveLabel>{article.number} / {category(article.category)}</ArchiveLabel><h1 className="serif" lang={articleLanguage(original, language)}>{article.title}</h1><p className="detail-deck" lang={articleLanguage(original, language)}>{article.excerpt}</p><div className="detail-article-byline"><span>{site.name}</span><time className="mono" dateTime={article.date}>{readableDate(article.date, language)}</time>{time && <span className="mono">{time}</span>}<span className="mono">{sourceLabel(publication(article), text)}</span>{originalLanguage && <span className="mono collection-original-language">{originalLanguage}</span>}</div></header>
+  return <div className="page-shell detail-article" lang={language}><Link className="text-link detail-back" to="/writing"><ArrowLeft size={16} aria-hidden="true" />{text('Back to the library', '서재로 돌아가기')}</Link><header className="detail-article-heading"><ArchiveLabel>{article.number} / {category(article.category)}</ArchiveLabel><h1 className="serif" lang={articleTitleLanguage(original, language)}>{article.title}</h1>{publication(original) === 'Naver Blog' && article.title !== original.title && <p className="detail-article-original-title" lang="ko">{original.title}</p>}<p className="detail-deck" lang={articleLanguage(original, language)}>{article.excerpt}</p><div className="detail-article-byline"><span>{site.name}</span><time className="mono" dateTime={article.date}>{readableDate(article.date, language)}</time>{time && <span className="mono">{time}</span>}<span className="mono">{sourceLabel(publication(article), text)}</span>{originalLanguage && <span className="mono collection-original-language">{originalLanguage}</span>}</div></header>
+    <NaverThumbnail article={original} image={image} className="detail-article-thumbnail" detail />
     <article className="detail-article-body">{article.body?.length ? article.body.map((paragraph, index) => <p key={index} lang={articleLanguage(original, language)}>{paragraph}</p>) : <div className="detail-publication-note"><ArchiveLabel>{text('A note from the archive', '아카이브에서 전하는 노트')}</ArchiveLabel><p>{article.externalUrl ? text(`This entry collects a title and a short preview. Read the complete piece in its original language on ${sourceLabel(publication(article), text)}.`, `제목과 짧은 미리보기를 모은 기록입니다. 전체 글은 ${sourceLabel(publication(article), text)}에서 원문으로 읽을 수 있어요.`) : text('The full text will join the archive when it is available.', '전체 글은 준비되면 아카이브에 추가할 예정입니다.')}</p></div>}{article.externalUrl && <div className="detail-article-original"><ExternalLink href={article.externalUrl} className="button button-dark">{text(`Read ${article.body?.length ? 'the original publication' : 'the full piece'} on ${sourceLabel(publication(article), text)}`, `${sourceLabel(publication(article), text)}에서 원문 읽기`)}</ExternalLink></div>}</article><div className="detail-article-end"><span className="serif" aria-hidden="true">❧</span><Link className="text-link" to="/writing">{text('Return to the shelves', '다른 글 둘러보기')}<ArrowRight size={17} aria-hidden="true" /></Link></div>
   </div>;
 }

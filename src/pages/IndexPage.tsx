@@ -31,7 +31,7 @@ export function IndexPage() {
     { title: text('Contact', '연락'), description: text('Connections & conversations', '연결과 대화의 시작'), to: '/contact' },
   ]
   const writingCollections = [
-    { source: 'naver', filterValue: 'Naver Blog', title: text('Naver Blog', '네이버 블로그'), titleLang: language, count: naverCount, description: text('Life, travels and thoughts · Korean originals', '일상과 여행, 생각의 기록 · 한국어 원문') },
+    { source: 'naver', filterValue: 'Naver Blog', title: text('Naver Blog', '네이버 블로그'), titleLang: language, count: naverCount, description: text('Life, travels and thoughts · English titles, Korean originals', '일상과 여행, 생각의 기록 · 한국어 원문') },
     { source: 'substack', filterValue: 'Substack', title: 'The Business Behind It', titleLang: 'en', count: substackCount, description: text('Business stories on Substack · English originals', '서브스택에 쓴 비즈니스 이야기 · 영어 원문') },
   ]
   return <div className="page-shell index-page">
