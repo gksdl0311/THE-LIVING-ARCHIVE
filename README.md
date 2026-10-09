@@ -41,7 +41,7 @@ Archive entries, career information, current notes and social links live in [`sr
 - **Skills and credentials:** add a group to `skills`, such as `{ category: 'Languages', items: [...] }`. The same format supports verified software skills, certifications and achievements.
 - **Exhibitions:** add real events to `exhibitions`, supplying a title, year and venue. The section stays hidden while the array is empty.
 - **CV:** put the real PDF in `public/cv/` and set `site.cvUrl` to its path, for example `/cv/hanyee-jang.pdf`. The interface reports that the CV is pending while the value is `null`.
-- **Contact:** edit `site.links`; use a `mailto:` URL for email and full HTTPS URLs for social profiles. Instagram, Naver Blog and The Business Behind It on Substack are configured.
+- **Contact:** edit `site.links`; use a `mailto:` URL for email and full HTTPS URLs for social profiles. LinkedIn, personal Instagram, art Instagram, Naver Blog and The Business Behind It on Substack are configured.
 - **Homepage selections:** set `featured: true` on the projects, artworks or articles you want to highlight. Surprise Me selects real published content; planned projects are excluded.
 - **Currently on my mind:** edit `currently`, using short labels, text and optional internal `href` values.
 

@@ -140,7 +140,7 @@ export interface SiteConfig {
   description: string
   cvUrl: string | null
   artistStatement?: string
-  links: { label: string; url: string }[]
+  links: { label: string; labelKo?: string; url: string }[]
   location?: string
 }
 
@@ -151,8 +151,10 @@ export const site: SiteConfig = {
   description: 'Art, ideas, work, words and other curiosities. An evolving personal archive of Hanyee Jang.',
   cvUrl: null,
   links: [
-    { label: 'Instagram · @paintwithhanyee', url: 'https://www.instagram.com/paintwithhanyee/' },
-    { label: 'Naver Blog · @gksdl0311', url: 'https://blog.naver.com/gksdl0311' },
+    { label: 'LinkedIn · Hanyee Jang', url: 'https://www.linkedin.com/in/hanyee-jang/' },
+    { label: 'Personal Instagram · @haaan._.i', labelKo: '개인 인스타그램 · @haaan._.i', url: 'https://www.instagram.com/haaan._.i/' },
+    { label: 'Art Instagram · @paintwithhanyee', labelKo: '그림 인스타그램 · @paintwithhanyee', url: 'https://www.instagram.com/paintwithhanyee/' },
+    { label: 'Naver Blog · @gksdl0311', labelKo: '네이버 블로그 · @gksdl0311', url: 'https://blog.naver.com/gksdl0311' },
     { label: 'Substack · The Business Behind It', url: 'https://thebusinessbehindit.substack.com' },
   ],
 }

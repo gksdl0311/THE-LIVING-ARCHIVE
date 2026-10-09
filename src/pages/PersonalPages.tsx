@@ -192,16 +192,18 @@ export function ContactPage() {
         <div className="personal-directory">
           <span className="mono personal-directory-label">{text('FIND ME HERE', '이곳에서 만나요')}</span>
           {site.links.length > 0 ? (
-            <ul>{site.links.map((link, index) => (
+            <ul>{site.links.map((link, index) => {
+              const label = text(link.label, link.labelKo || link.label);
+              return (
               <li key={link.url}>
                 <a href={link.url} target={link.url.startsWith('mailto:') ? undefined : '_blank'} rel={link.url.startsWith('mailto:') ? undefined : 'noreferrer'}>
                   <span className="mono personal-directory-number">{String(index + 1).padStart(2, '0')}</span>
-                  <span>{platformName(link.label.split(' · ')[0])}<small>{link.label.includes(' · ') ? link.label.split(' · ').slice(1).join(' · ') : link.url.startsWith('mailto:') ? link.url.slice(7) : text('Visit profile', '프로필 방문하기')}</small></span>
+                  <span>{platformName(label.split(' · ')[0])}<small>{label.includes(' · ') ? label.split(' · ').slice(1).join(' · ') : link.url.startsWith('mailto:') ? link.url.slice(7) : text('Visit profile', '프로필 방문하기')}</small></span>
                   <ArrowUpRight aria-hidden="true" size={26} />
                   {!link.url.startsWith('mailto:') && <span className="sr-only">{text(' (opens in a new tab)', ' (새 탭에서 열립니다)')}</span>}
                 </a>
               </li>
-            ))}</ul>
+            )})}</ul>
           ) : <p className="personal-directory-empty">{text('Contact details will be added here when available.', '연락처가 준비되면 이곳에 안내할 예정입니다.')}</p>}
           <p className="personal-directory-note">{text('A small directory, with room to grow.', '천천히 넓혀 가는 작은 연결의 목록.')}</p>
         </div>
